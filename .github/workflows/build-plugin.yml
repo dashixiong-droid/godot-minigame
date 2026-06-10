@@ -19,6 +19,9 @@ on:
         default: false
         type: boolean
 
+permissions:
+  contents: write
+
 env:
   BUILD_TYPE: template_release
 
@@ -39,37 +42,30 @@ jobs:
           - platform: macos
             runner: macos-latest
             arch: universal
-
     steps:
       - uses: actions/checkout@v4
-
       - name: Clone godot-cpp at version
         shell: bash
         run: |
           rm -rf godot-cpp
           git clone --depth 1 --branch ${{ inputs.godot_version }} https://github.com/godotengine/godot-cpp.git godot-cpp
           echo "godot-cpp at: $(cd godot-cpp && git rev-parse --short HEAD)"
-
       - name: Install deps (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y scons pkg-config libx11-dev libxcursor-dev libxrandr-dev libgl1-mesa-dev libxi-dev libxinerama-dev libwayland-dev
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
       - name: Install scons
         run: pip install scons
-
       - name: Build
         shell: bash
         run: |
           cores=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2)
           scons platform=${{ matrix.platform }} arch=${{ matrix.arch }} target=${{ env.BUILD_TYPE }} embed_resources=yes -j$cores
-
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -82,15 +78,15 @@ jobs:
     needs: build
     if: inputs.publish_release
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
-
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: dist/
           pattern: plugin-${{ inputs.godot_version }}-*
-
       - name: Package
         shell: bash
         run: |
@@ -102,7 +98,6 @@ jobs:
             zip -r "$GITHUB_WORKSPACE/release/godot-minigame-plugin-${{ inputs.godot_version }}-${platform}.zip" .
             cd "$GITHUB_WORKSPACE"
           done
-
           # All-in-one bundle
           mkdir -p bundle/addons/godot-minigame/bin
           cp demo/addons/godot-minigame/plugin.cfg bundle/addons/godot-minigame/
@@ -114,10 +109,8 @@ jobs:
             cp -r "$dir"* "bundle/addons/godot-minigame/bin/$platform/"
           done
           cd bundle && zip -r "$GITHUB_WORKSPACE/release/godot-minigame-plugin-${{ inputs.godot_version }}-all-platforms.zip" . && cd ..
-
           echo "Release contents:"
           ls -la release/
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
