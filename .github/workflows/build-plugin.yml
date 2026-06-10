@@ -42,25 +42,14 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
-      - name: Checkout godot-cpp tag
+      - name: Clone godot-cpp at version
         shell: bash
         run: |
-          cd godot-cpp
-          # Fetch all tags — submodule checkout doesn't include them by default
-          git fetch origin +refs/tags/*:refs/tags/*
-          if git rev-parse "${{ inputs.godot_version }}" >/dev/null 2>&1; then
-            git checkout "${{ inputs.godot_version }}"
-            echo "Checked out godot-cpp tag: ${{ inputs.godot_version }}"
-          else
-            echo "ERROR: Tag '${{ inputs.godot_version }}' not found in godot-cpp"
-            echo "Available tags:"
-            git tag -l '4.*' | sort -V
-            exit 1
-          fi
-          echo "godot-cpp commit: $(git rev-parse --short HEAD)"
+          # Remove the submodule checkout and clone fresh with the right tag
+          rm -rf godot-cpp
+          git clone --depth 1 --branch ${{ inputs.godot_version }} https://github.com/godotengine/godot-cpp.git godot-cpp
+          echo "godot-cpp at: $(cd godot-cpp && git rev-parse --short HEAD)"
 
       - name: Install deps (Linux)
         if: runner.os == 'Linux'
