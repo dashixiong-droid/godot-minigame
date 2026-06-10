@@ -1,0 +1,67 @@
+name: Build Plugin Only
+
+on:
+  workflow_dispatch:
+    inputs:
+      godot_cpp_branch:
+        description: 'godot-cpp branch (e.g. 4.4, 4.5, 4.6)'
+        required: false
+        default: '4.6'
+
+env:
+  BUILD_TYPE: template_release
+
+jobs:
+  build:
+    name: ${{ matrix.platform }}-${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows
+            runner: windows-latest
+            arch: x86_64
+          - platform: linux
+            runner: ubuntu-latest
+            arch: x86_64
+          - platform: macos
+            runner: macos-latest
+            arch: universal
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Switch godot-cpp branch
+        if: inputs.godot_cpp_branch != ''
+        run: |
+          cd godot-cpp
+          git fetch origin ${{ inputs.godot_cpp_branch }}
+          git checkout origin/${{ inputs.godot_cpp_branch }}
+
+      - name: Install deps (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y scons pkg-config libx11-dev libxcursor-dev libxrandr-dev libgl1-mesa-dev libxi-dev libxinerama-dev libwayland-dev
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install scons
+        run: pip install scons
+
+      - name: Build
+        run: |
+          cores=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2)
+          scons platform=${{ matrix.platform }} arch=${{ matrix.arch }} target=${{ env.BUILD_TYPE }} embed_resources=yes -j$cores
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-minigame-${{ matrix.platform }}-${{ matrix.arch }}
+          path: demo/addons/godot-minigame/bin/${{ matrix.platform }}/
