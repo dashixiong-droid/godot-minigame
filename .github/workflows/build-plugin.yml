@@ -4,15 +4,15 @@ on:
   workflow_dispatch:
     inputs:
       godot_version:
-        description: 'Godot version (4.3.0 / 4.4.0 / 4.5.1 / 4.6.2)'
+        description: 'Godot version'
         required: true
-        default: '4.4.0'
+        default: 'godot-4.4-stable'
         type: choice
         options:
-          - '4.3.0'
-          - '4.4.0'
-          - '4.5.1'
-          - '4.6.2'
+          - 'godot-4.3-stable'
+          - 'godot-4.4-stable'
+          - 'godot-4.4.1-stable'
+          - 'godot-4.5-stable'
       publish_release:
         description: 'Publish as GitHub Release?'
         required: false
@@ -46,7 +46,6 @@ jobs:
       - name: Clone godot-cpp at version
         shell: bash
         run: |
-          # Remove the submodule checkout and clone fresh with the right tag
           rm -rf godot-cpp
           git clone --depth 1 --branch ${{ inputs.godot_version }} https://github.com/godotengine/godot-cpp.git godot-cpp
           echo "godot-cpp at: $(cd godot-cpp && git rev-parse --short HEAD)"
@@ -96,15 +95,15 @@ jobs:
         shell: bash
         run: |
           mkdir -p release
+          # Platform-specific zips
           for dir in dist/plugin-${{ inputs.godot_version }}-*/; do
             platform=$(basename "$dir" | sed "s/plugin-${{ inputs.godot_version }}-//")
-            # Create platform-specific zip
             cd "$dir"
             zip -r "$GITHUB_WORKSPACE/release/godot-minigame-plugin-${{ inputs.godot_version }}-${platform}.zip" .
             cd "$GITHUB_WORKSPACE"
           done
 
-          # Create all-in-one bundle
+          # All-in-one bundle
           mkdir -p bundle/addons/godot-minigame/bin
           cp demo/addons/godot-minigame/plugin.cfg bundle/addons/godot-minigame/
           cp demo/addons/godot-minigame/plugin.gd bundle/addons/godot-minigame/
@@ -123,16 +122,14 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ inputs.godot_version }}
-          name: Godot ${{ inputs.godot_version }} Plugin
+          name: Plugin for Godot ${{ inputs.godot_version }}
           body: |
-            Godot Minigame editor plugin for Godot ${{ inputs.godot_version }}
+            Godot Minigame editor plugin — built against godot-cpp `${{ inputs.godot_version }}`
 
             ## Downloads
-            - `all-platforms.zip` — Windows + Linux + macOS (推荐)
-            - `windows-x86_64.zip` — 仅 Windows
-            - `linux-x86_64.zip` — 仅 Linux
-            - `macos-universal.zip` — 仅 macOS (Apple Silicon + Intel)
+            - `all-platforms.zip` — Windows + Linux + macOS
+            - `windows-x86_64.zip` / `linux-x86_64.zip` / `macos-universal.zip`
 
-            ## 安装
-            解压到你的 Godot 项目 `res://addons/godot-minigame/` 目录下
+            ## Install
+            解压到 Godot 项目 `res://addons/godot-minigame/` 目录
           files: release/*
