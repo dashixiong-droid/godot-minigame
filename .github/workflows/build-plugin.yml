@@ -87,30 +87,61 @@ jobs:
         with:
           path: dist/
           pattern: plugin-${{ inputs.godot_version }}-*
-      - name: Package
+      - name: Package as ready-to-use addon
         shell: bash
         run: |
           mkdir -p release
-          # Platform-specific zips
+
+          # Build the complete addons/godot-minigame/ directory structure
+          ADDON_DIR="addons/godot-minigame"
+          mkdir -p "$ADDON_DIR/bin"
+
+          # Copy plugin metadata files from repo
+          cp demo/addons/godot-minigame/plugin.cfg "$ADDON_DIR/"
+          cp demo/addons/godot-minigame/plugin.gd "$ADDON_DIR/"
+          cp demo/addons/godot-minigame/godot-minigame.gdextension "$ADDON_DIR/"
+
+          # Copy .uid files if they exist
+          for uid in demo/addons/godot-minigame/*.uid; do
+            [ -f "$uid" ] && cp "$uid" "$ADDON_DIR/"
+          done
+
+          # Copy compiled libraries from all platforms
           for dir in dist/plugin-${{ inputs.godot_version }}-*/; do
             platform=$(basename "$dir" | sed "s/plugin-${{ inputs.godot_version }}-//")
-            cd "$dir"
-            zip -r "$GITHUB_WORKSPACE/release/godot-minigame-plugin-${{ inputs.godot_version }}-${platform}.zip" .
-            cd "$GITHUB_WORKSPACE"
+            # Extract platform name (e.g. "windows-x86_64" -> "windows")
+            plat_name=$(echo "$platform" | cut -d- -f1)
+            mkdir -p "$ADDON_DIR/bin/$plat_name"
+            cp -r "$dir"* "$ADDON_DIR/bin/$plat_name/"
           done
-          # All-in-one bundle
-          mkdir -p bundle/addons/godot-minigame/bin
-          cp demo/addons/godot-minigame/plugin.cfg bundle/addons/godot-minigame/
-          cp demo/addons/godot-minigame/plugin.gd bundle/addons/godot-minigame/
-          cp demo/addons/godot-minigame/godot-minigame.gdextension bundle/addons/godot-minigame/
+
+          echo "=== Addon structure ==="
+          find "$ADDON_DIR" -type f | sort
+
+          # Create the all-platforms zip (addons/ root so user can unzip directly into project)
+          zip -r "release/godot-minigame-plugin-${{ inputs.godot_version }}-all-platforms.zip" "$ADDON_DIR"
+
+          # Also create per-platform zips for smaller downloads
           for dir in dist/plugin-${{ inputs.godot_version }}-*/; do
             platform=$(basename "$dir" | sed "s/plugin-${{ inputs.godot_version }}-//")
-            mkdir -p "bundle/addons/godot-minigame/bin/$platform"
-            cp -r "$dir"* "bundle/addons/godot-minigame/bin/$platform/"
+            plat_name=$(echo "$platform" | cut -d- -f1)
+            # Per-platform: metadata + only that platform's bin
+            plat_dir="addons/godot-minigame"
+            mkdir -p "plat_$plat_name/$plat_dir/bin/$plat_name"
+            cp demo/addons/godot-minigame/plugin.cfg "plat_$plat_name/$plat_dir/"
+            cp demo/addons/godot-minigame/plugin.gd "plat_$plat_name/$plat_dir/"
+            cp demo/addons/godot-minigame/godot-minigame.gdextension "plat_$plat_name/$plat_dir/"
+            for uid in demo/addons/godot-minigame/*.uid; do
+              [ -f "$uid" ] && cp "$uid" "plat_$plat_name/$plat_dir/"
+            done
+            cp -r "$dir"* "plat_$plat_name/$plat_dir/bin/$plat_name/"
+            zip -r "release/godot-minigame-plugin-${{ inputs.godot_version }}-${platform}.zip" "plat_$plat_name/$ADDON_DIR"
+            rm -rf "plat_$plat_name"
           done
-          cd bundle && zip -r "$GITHUB_WORKSPACE/release/godot-minigame-plugin-${{ inputs.godot_version }}-all-platforms.zip" . && cd ..
-          echo "Release contents:"
-          ls -la release/
+
+          echo "=== Release contents ==="
+          ls -lh release/
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -120,9 +151,11 @@ jobs:
             Godot Minigame editor plugin — built against godot-cpp `${{ inputs.godot_version }}`
 
             ## Downloads
-            - `all-platforms.zip` — Windows + Linux + macOS
-            - `windows-x86_64.zip` / `linux-x86_64.zip` / `macos-universal.zip`
+            - `all-platforms.zip` — Windows + Linux + macOS (完整插件目录)
+            - `windows-x86_64.zip` / `linux-x86_64.zip` / `macos-universal.zip` — 单平台
 
             ## Install
-            解压到 Godot 项目 `res://addons/godot-minigame/` 目录
+            1. 下载 `all-platforms.zip`（或对应平台包）
+            2. 解压到 Godot 项目的 `res://` 目录（会自动创建 `addons/godot-minigame/`）
+            3. 编辑器 → 项目 → 项目设置 → 插件 → 启用 `Godot Minigame`
           files: release/*
