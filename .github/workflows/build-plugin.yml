@@ -36,6 +36,7 @@ jobs:
 
       - name: Switch godot-cpp branch
         if: inputs.godot_cpp_branch != ''
+        shell: bash
         run: |
           cd godot-cpp
           git fetch origin
