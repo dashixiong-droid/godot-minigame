@@ -63,6 +63,7 @@ jobs:
         run: pip install scons
 
       - name: Build
+        shell: bash
         run: |
           cores=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2)
           scons platform=${{ matrix.platform }} arch=${{ matrix.arch }} target=${{ env.BUILD_TYPE }} embed_resources=yes -j$cores
