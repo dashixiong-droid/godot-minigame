@@ -87,6 +87,23 @@ jobs:
         with:
           path: dist/
           pattern: plugin-${{ inputs.godot_version }}-*
+      - name: Download template from upstream
+        shell: bash
+        run: |
+          # Map godot-cpp tag to upstream template version
+          case "${{ inputs.godot_version }}" in
+            godot-4.3-stable)   TPZ_VER="4.3.0"; TPZ_FILE="minigame4.3.0.3.tpz" ;;
+            godot-4.4-stable)   TPZ_VER="4.4.0"; TPZ_FILE="minigame4.4.0.1.tpz" ;;
+            godot-4.4.1-stable) TPZ_VER="4.4.0"; TPZ_FILE="minigame4.4.0.1.tpz" ;;
+            godot-4.5-stable)   TPZ_VER="4.5.1"; TPZ_FILE="minigame4.5.1.tpz" ;;
+            *) echo "Unknown version"; exit 1 ;;
+          esac
+          echo "TPZ_VER=$TPZ_VER" >> $GITHUB_ENV
+          echo "TPZ_FILE=$TPZ_FILE" >> $GITHUB_ENV
+          curl -L -o "release-tpz/$TPZ_FILE" "https://github.com/godothub/godot-minigame/releases/download/${TPZ_VER}/${TPZ_FILE}" 2>&1 || true
+          mkdir -p release-tpz
+          curl -L -o "release-tpz/$TPZ_FILE" "https://github.com/godothub/godot-minigame/releases/download/${TPZ_VER}/${TPZ_FILE}"
+          ls -lh release-tpz/
       - name: Package as ready-to-use addon
         shell: bash
         run: |
@@ -109,35 +126,23 @@ jobs:
           # Copy compiled libraries from all platforms
           for dir in dist/plugin-${{ inputs.godot_version }}-*/; do
             platform=$(basename "$dir" | sed "s/plugin-${{ inputs.godot_version }}-//")
-            # Extract platform name (e.g. "windows-x86_64" -> "windows")
             plat_name=$(echo "$platform" | cut -d- -f1)
             mkdir -p "$ADDON_DIR/bin/$plat_name"
             cp -r "$dir"* "$ADDON_DIR/bin/$plat_name/"
           done
 
+          # Copy template .tpz into addon dir for local use
+          mkdir -p "$ADDON_DIR/templates"
+          cp release-tpz/$TPZ_FILE "$ADDON_DIR/templates/"
+
           echo "=== Addon structure ==="
           find "$ADDON_DIR" -type f | sort
 
-          # Create the all-platforms zip (addons/ root so user can unzip directly into project)
+          # All-platforms zip (with template)
           zip -r "release/godot-minigame-plugin-${{ inputs.godot_version }}-all-platforms.zip" "$ADDON_DIR"
 
-          # Also create per-platform zips for smaller downloads
-          for dir in dist/plugin-${{ inputs.godot_version }}-*/; do
-            platform=$(basename "$dir" | sed "s/plugin-${{ inputs.godot_version }}-//")
-            plat_name=$(echo "$platform" | cut -d- -f1)
-            # Per-platform: metadata + only that platform's bin
-            plat_dir="addons/godot-minigame"
-            mkdir -p "plat_$plat_name/$plat_dir/bin/$plat_name"
-            cp demo/addons/godot-minigame/plugin.cfg "plat_$plat_name/$plat_dir/"
-            cp demo/addons/godot-minigame/plugin.gd "plat_$plat_name/$plat_dir/"
-            cp demo/addons/godot-minigame/godot-minigame.gdextension "plat_$plat_name/$plat_dir/"
-            for uid in demo/addons/godot-minigame/*.uid; do
-              [ -f "$uid" ] && cp "$uid" "plat_$plat_name/$plat_dir/"
-            done
-            cp -r "$dir"* "plat_$plat_name/$plat_dir/bin/$plat_name/"
-            zip -r "release/godot-minigame-plugin-${{ inputs.godot_version }}-${platform}.zip" "plat_$plat_name/$ADDON_DIR"
-            rm -rf "plat_$plat_name"
-          done
+          # Template-only zip
+          cp release-tpz/$TPZ_FILE "release/$TPZ_FILE"
 
           echo "=== Release contents ==="
           ls -lh release/
@@ -148,14 +153,18 @@ jobs:
           tag_name: v${{ inputs.godot_version }}
           name: Plugin for Godot ${{ inputs.godot_version }}
           body: |
-            Godot Minigame editor plugin — built against godot-cpp `${{ inputs.godot_version }}`
+            Godot Minigame editor plugin + 微信小游戏模板 — built against godot-cpp `${{ inputs.godot_version }}`
 
             ## Downloads
-            - `all-platforms.zip` — Windows + Linux + macOS (完整插件目录)
-            - `windows-x86_64.zip` / `linux-x86_64.zip` / `macos-universal.zip` — 单平台
+            - `all-platforms.zip` — 完整插件目录（含模板 .tpz）
+            - `$TPZ_FILE` — 微信小游戏模板（单独下载）
 
             ## Install
-            1. 下载 `all-platforms.zip`（或对应平台包）
+            1. 下载 `all-platforms.zip`
             2. 解压到 Godot 项目的 `res://` 目录（会自动创建 `addons/godot-minigame/`）
             3. 编辑器 → 项目 → 项目设置 → 插件 → 启用 `Godot Minigame`
+            4. 在 Minigame 面板配置模板源指向本仓库 Release
+
+            ## 模板已内置
+            模板文件在 `addons/godot-minigame/templates/` 目录下，插件可从本地加载，无需联网下载。
           files: release/*
