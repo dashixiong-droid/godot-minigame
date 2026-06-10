@@ -6,7 +6,7 @@ on:
       godot_cpp_branch:
         description: 'godot-cpp branch (e.g. 4.4, 4.5, 4.6)'
         required: false
-        default: '4.6'
+        default: '4.4'
 
 env:
   BUILD_TYPE: template_release
@@ -38,8 +38,14 @@ jobs:
         if: inputs.godot_cpp_branch != ''
         run: |
           cd godot-cpp
-          git fetch origin ${{ inputs.godot_cpp_branch }}
-          git checkout origin/${{ inputs.godot_cpp_branch }}
+          git fetch origin
+          # Try exact branch first, then try as tag prefix
+          if git rev-parse --verify "origin/${{ inputs.godot_cpp_branch }}" >/dev/null 2>&1; then
+            git checkout "origin/${{ inputs.godot_cpp_branch }}"
+          else
+            echo "Branch '${{ inputs.godot_cpp_branch }}' not found, keeping default"
+          fi
+          echo "Using godot-cpp at: $(git rev-parse --short HEAD)"
 
       - name: Install deps (Linux)
         if: runner.os == 'Linux'
