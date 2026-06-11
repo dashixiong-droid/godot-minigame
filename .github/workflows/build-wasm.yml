@@ -53,14 +53,14 @@ jobs:
       - name: Clone Godot engine
         run: |
           mkdir -p godot-engine
-          # Clone the 4.6 branch (shallow but with enough history to reach the target commit)
-          git clone --branch 4.6 --depth 500 https://github.com/godotengine/godot.git godot-engine
           cd godot-engine
-          GODOT_COMMIT="${{ inputs.godot_commit }}"
-          if [ -n "$GODOT_COMMIT" ]; then
-            git fetch --depth 1 origin "$GODOT_COMMIT"
-            git checkout "$GODOT_COMMIT"
+          git init
+          GODOT_COMMIT="a16e481cf424f8e39dc2cdea1a6bdc1e309acdc1"
+          if [ -n "${{ inputs.godot_commit }}" ]; then
+            GODOT_COMMIT="${{ inputs.godot_commit }}"
           fi
+          git fetch --depth 1 https://github.com/godotengine/godot.git "$GODOT_COMMIT"
+          git checkout FETCH_HEAD
           echo "Godot engine at commit: $(git rev-parse HEAD)"
 
       - name: Apply minigame patches
