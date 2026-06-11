@@ -80,10 +80,16 @@ jobs:
           version: 3.1.39
           actions-cache-folder: 'emsdk-cache'
 
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq scons brotli
+
       - name: Verify emsdk
         run: |
           emcc --version
           which emcc
+          scons --version
 
       - name: SCons build Godot WASM
         run: |
@@ -124,7 +130,6 @@ jobs:
 
       - name: Brotli compress wasm files
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq brotli
           cd godot-engine/bin/.web_zip
           for wasm in *.wasm; do
             echo "Compressing $wasm with brotli quality ${{ inputs.brotli_quality }}..."
