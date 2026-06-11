@@ -1,0 +1,8 @@
+{
+  "godot_version": "4.6.2-rc",
+  "godot_commit": "a16e481cf424f8e39dc2cdea1a6bdc1e309acdc1",
+  "godot_repo": "https://github.com/godotengine/godot",
+  "bundle": "godot-4.6.2-rc-a16e481cf4",
+  "patches": ["core.patch"],
+  "description": "Godot 4.6.2-rc WeChat Mini Game WASM build — patches and sources from godothub/godot-minigame skills/"
+}

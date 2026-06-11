@@ -1,0 +1,143 @@
+name: Build Godot WASM for WeChat Mini Game
+
+on:
+  workflow_dispatch:
+    inputs:
+      godot_version:
+        description: 'Godot version tag/branch to build'
+        required: true
+        type: string
+        default: '4.6.2-rc'
+      godot_commit:
+        description: 'Godot commit hash (leave empty to use version tag HEAD)'
+        required: false
+        type: string
+        default: 'a16e481cf424f8e39dc2cdea1a6bdc1e309acdc1'
+      dlink_enabled:
+        description: 'Enable dynamic linking (side wasm)'
+        required: false
+        type: choice
+        options: ['yes', 'no']
+        default: 'yes'
+      threads:
+        description: 'Enable threading support'
+        required: false
+        type: choice
+        options: ['yes', 'no']
+        default: 'no'
+      wasm_simd:
+        description: 'Enable WASM SIMD'
+        required: false
+        type: choice
+        options: ['yes', 'no']
+        default: 'no'
+      include_audio_worker:
+        description: 'Include audio worker optional feature'
+        required: false
+        type: choice
+        options: ['yes', 'no']
+        default: 'yes'
+      brotli_quality:
+        description: 'Brotli compression quality (1-11)'
+        required: false
+        type: string
+        default: '11'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout CI repo (godot-minigame fork)
+        uses: actions/checkout@v4
+
+      - name: Clone Godot engine
+        run: |
+          mkdir -p godot-engine
+          git clone --depth 1 --branch ${{ inputs.godot_version }} https://github.com/godotengine/godot.git godot-engine
+          cd godot-engine
+          if [ -n "${{ inputs.godot_commit }}" ]; then
+            git fetch --depth 1 origin ${{ inputs.godot_commit }}
+            git checkout ${{ inputs.godot_commit }}
+          fi
+          echo "Godot engine at commit: $(git rev-parse HEAD)"
+
+      - name: Apply minigame patches
+        run: |
+          OPTIONAL_FLAGS=""
+          if [ "${{ inputs.include_audio_worker }}" = "yes" ]; then
+            OPTIONAL_FLAGS="--include-optional audio-worker"
+          fi
+          python3 skills/scripts/apply_godot_patchset.py godot-engine \
+            --allow-base-mismatch \
+            --allow-dirty \
+            $OPTIONAL_FLAGS
+
+      - name: Setup Emscripten SDK
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 3.1.39
+          actions-cache-folder: 'emsdk-cache'
+
+      - name: Verify emsdk
+        run: |
+          emcc --version
+          which emcc
+
+      - name: SCons build Godot WASM
+        run: |
+          cd godot-engine
+          SCONS_FLAGS="platform=web target=template_release"
+          if [ "${{ inputs.dlink_enabled }}" = "yes" ]; then
+            SCONS_FLAGS="$SCONS_FLAGS dlink_enabled=yes"
+          fi
+          if [ "${{ inputs.threads }}" = "yes" ]; then
+            SCONS_FLAGS="$SCONS_FLAGS threads=yes"
+          fi
+          if [ "${{ inputs.wasm_simd }}" = "yes" ]; then
+            SCONS_FLAGS="$SCONS_FLAGS wasm_simd=yes"
+          fi
+          echo "SCons flags: $SCONS_FLAGS"
+          scons $SCONS_FLAGS -j$(nproc)
+
+      - name: Copy build artifacts to .web_zip
+        run: |
+          cd godot-engine
+          mkdir -p bin/.web_zip
+          cp -v bin/godot.web.template_release.wasm32.nothreads.wasm bin/.web_zip/godot.wasm 2>/dev/null || true
+          # Handle side wasm from dlink
+          for f in bin/godot.web.template_release.wasm32.nothreads.*.wasm; do
+            if [ -f "$f" ]; then
+              base=$(basename "$f")
+              suffix=$(echo "$base" | sed 's/godot\.web\.template_release\.wasm32\.nothreads\.//')
+              cp -v "$f" "bin/.web_zip/godot.${suffix}"
+            fi
+          done
+          cp -v bin/godot.web.template_release.wasm32.nothreads.js bin/.web_zip/godot.js 2>/dev/null || true
+          ls -la bin/.web_zip/
+
+      - name: Run godot_process.js post-processing
+        run: |
+          cd godot-engine
+          node ../skills/scripts/godot_process.js
+
+      - name: Brotli compress wasm files
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq brotli
+          cd godot-engine/bin/.web_zip
+          for wasm in *.wasm; do
+            echo "Compressing $wasm with brotli quality ${{ inputs.brotli_quality }}..."
+            brotli -q ${{ inputs.brotli_quality }} -f "$wasm" -o "${wasm}.br"
+          done
+          ls -la
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-wasm-${{ inputs.godot_version }}-${{ github.run_id }}
+          path: |
+            godot-engine/bin/.web_zip/*.js
+            godot-engine/bin/.web_zip/*.wasm
+            godot-engine/bin/.web_zip/*.wasm.br
+            godot-engine/bin/.web_zip/*.html
+            godot-engine/bin/.web_zip/*.worker.js
+            godot-engine/bin/.web_zip/*.pck
