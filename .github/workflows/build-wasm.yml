@@ -53,11 +53,13 @@ jobs:
       - name: Clone Godot engine
         run: |
           mkdir -p godot-engine
-          git clone --depth 1 --branch ${{ inputs.godot_version }} https://github.com/godotengine/godot.git godot-engine
+          # Clone the 4.6 branch (shallow but with enough history to reach the target commit)
+          git clone --branch 4.6 --depth 500 https://github.com/godotengine/godot.git godot-engine
           cd godot-engine
-          if [ -n "${{ inputs.godot_commit }}" ]; then
-            git fetch --depth 1 origin ${{ inputs.godot_commit }}
-            git checkout ${{ inputs.godot_commit }}
+          GODOT_COMMIT="${{ inputs.godot_commit }}"
+          if [ -n "$GODOT_COMMIT" ]; then
+            git fetch --depth 1 origin "$GODOT_COMMIT"
+            git checkout "$GODOT_COMMIT"
           fi
           echo "Godot engine at commit: $(git rev-parse HEAD)"
 
