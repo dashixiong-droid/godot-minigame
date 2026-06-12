@@ -141,10 +141,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: godot-wasm-${{ inputs.godot_version }}-${{ github.run_id }}
-          path: |
-            ${{ github.workspace }}/godot-engine/bin/.web_zip/*.js
-            ${{ github.workspace }}/godot-engine/bin/.web_zip/*.wasm
-            ${{ github.workspace }}/godot-engine/bin/.web_zip/*.wasm.br
-            ${{ github.workspace }}/godot-engine/bin/.web_zip/*.html
-            ${{ github.workspace }}/godot-engine/bin/.web_zip/*.worker.js
-            ${{ github.workspace }}/godot-engine/bin/.web_zip/*.pck
+          path: godot-engine/bin/.web_zip
