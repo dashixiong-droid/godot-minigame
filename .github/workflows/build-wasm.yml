@@ -4,12 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       godot_version:
-        description: 'Godot version tag/branch to build'
+        description: 'Godot version (for naming, e.g. 4.6.2)'
         required: true
         type: string
-        default: '4.6.2-rc'
+        default: '4.6.2'
       godot_commit:
-        description: 'Godot commit hash (leave empty to use version tag HEAD)'
+        description: 'Godot commit hash'
         required: false
         type: string
         default: 'a16e481cf424f8e39dc2cdea1a6bdc1e309acdc1'
@@ -42,6 +42,18 @@ on:
         required: false
         type: string
         default: '11'
+      minify_js:
+        description: 'Minify godot.js with Terser'
+        required: false
+        type: choice
+        options: ['yes', 'no']
+        default: 'yes'
+      create_release:
+        description: 'Create GitHub Release with tpz'
+        required: false
+        type: choice
+        options: ['yes', 'no']
+        default: 'yes'
 
 jobs:
   build:
@@ -112,7 +124,6 @@ jobs:
           cd godot-engine
           mkdir -p bin/.web_zip
           cp -v bin/godot.web.template_release.wasm32.nothreads.wasm bin/.web_zip/godot.wasm 2>/dev/null || true
-          # Handle side wasm from dlink
           for f in bin/godot.web.template_release.wasm32.nothreads.*.wasm; do
             if [ -f "$f" ]; then
               base=$(basename "$f")
@@ -128,6 +139,17 @@ jobs:
           cd godot-engine
           node ../skills/scripts/godot_process.js
 
+      - name: Minify godot.js (Terser)
+        if: ${{ inputs.minify_js == 'yes' }}
+        run: |
+          cd godot-engine/bin/.web_zip
+          echo "Before minify: $(wc -c < godot.js) bytes"
+          npx terser godot.js \
+            --compress passes=2,drop_console=true,pure_getters=true,keep_fargs=false,unsafe_comps=true,unsafe=true \
+            --mangle toplevel=true \
+            --output godot.js
+          echo "After minify:  $(wc -c < godot.js) bytes"
+
       - name: Brotli compress wasm files
         run: |
           cd godot-engine/bin/.web_zip
@@ -137,9 +159,47 @@ jobs:
           done
           ls -la
 
-      - name: Upload build artifacts
+      - name: Package tpz
+        run: |
+          chmod +x scripts/pack_tpz.sh
+          bash scripts/pack_tpz.sh "${{ inputs.godot_version }}" godot-engine/bin/.web_zip
+          echo "TPZ size: $(ls -lh output/*.tpz | awk '{print $5}')"
+
+      - name: Upload raw artifacts
         uses: actions/upload-artifact@v4
         with:
           name: godot-wasm-${{ inputs.godot_version }}-${{ github.run_id }}
           path: godot-engine/bin/.web_zip
           include-hidden-files: true
+
+      - name: Upload tpz artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: minigame${{ inputs.godot_version }}-tpz
+          path: output/*.tpz
+
+      - name: Create GitHub Release
+        if: ${{ inputs.create_release == 'yes' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.godot_version }}
+          name: Godot ${{ inputs.godot_version }} WASM Template
+          body: |
+            ## Godot ${{ inputs.godot_version }} WeChat Mini Game Template
+
+            **Build Info:**
+            - Godot commit: `${{ inputs.godot_commit }}`
+            - DLink: ${{ inputs.dlink_enabled }}
+            - Threads: ${{ inputs.threads }}
+            - SIMD: ${{ inputs.wasm_simd }}
+            - Audio Worker: ${{ inputs.include_audio_worker }}
+            - JS Minified: ${{ inputs.minify_js }}
+
+            **Files:**
+            - `minigame${{ inputs.godot_version }}.tpz` — Full template package
+            - Raw artifacts available in build artifacts
+
+            [Download from build artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          files: output/*.tpz
+          draft: false
+          prerelease: false
