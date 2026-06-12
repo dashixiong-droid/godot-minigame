@@ -142,9 +142,9 @@ jobs:
         with:
           name: godot-wasm-${{ inputs.godot_version }}-${{ github.run_id }}
           path: |
-            godot-engine/bin/.web_zip/*.js
-            godot-engine/bin/.web_zip/*.wasm
-            godot-engine/bin/.web_zip/*.wasm.br
-            godot-engine/bin/.web_zip/*.html
-            godot-engine/bin/.web_zip/*.worker.js
-            godot-engine/bin/.web_zip/*.pck
+            ${{ github.workspace }}/godot-engine/bin/.web_zip/*.js
+            ${{ github.workspace }}/godot-engine/bin/.web_zip/*.wasm
+            ${{ github.workspace }}/godot-engine/bin/.web_zip/*.wasm.br
+            ${{ github.workspace }}/godot-engine/bin/.web_zip/*.html
+            ${{ github.workspace }}/godot-engine/bin/.web_zip/*.worker.js
+            ${{ github.workspace }}/godot-engine/bin/.web_zip/*.pck
