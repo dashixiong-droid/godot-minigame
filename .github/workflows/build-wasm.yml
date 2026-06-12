@@ -142,3 +142,4 @@ jobs:
         with:
           name: godot-wasm-${{ inputs.godot_version }}-${{ github.run_id }}
           path: godot-engine/bin/.web_zip
+          include-hidden-files: true
